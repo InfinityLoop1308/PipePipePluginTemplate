@@ -1,0 +1,120 @@
+// Builds this plugin into a PipePipe plugin package (.ppp):
+// a zip that is both a jar (for JVM hosts) and contains classes.dex (for Android hosts),
+// plus plugin.json at the root.
+//
+//   ./gradlew :tools:genKey    -> signing.key (once, keep it secret and backed up)
+//   ./gradlew assembleRepo     -> build/repo/*.ppp
+//   ./gradlew :tools:index     -> build/repo/index.json (signed)
+//
+// Upload the content of build/repo to any static https host. Users add the url of
+// index.json as a repository in PipePipe.
+
+plugins {
+    id 'java-library'
+}
+
+def localProps = new Properties()
+def localPropsFile = file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def sdkDir = localProps.getProperty('sdk.dir') ?: System.getenv('ANDROID_HOME')
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+}
+
+allprojects {
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+}
+
+configurations {
+    desugarConfig
+}
+
+dependencies {
+    // Provided by the host at runtime, never bundle them
+    compileOnly "com.github.InfinityLoop1308.PipePipeExtractor:extractor:$extractorVersion"
+    compileOnly "com.github.TeamNewPipe:nanojson:$nanojsonVersion"
+    compileOnly "org.jsoup:jsoup:$jsoupVersion"
+    compileOnly "com.github.spotbugs:spotbugs-annotations:$spotbugsVersion"
+    desugarConfig "com.android.tools:desugar_jdk_libs_configuration:$desugarJdkLibsVersion"
+}
+
+def manifestFile = file('src/main/resources/plugin.json')
+def manifestJson = new groovy.json.JsonSlurper().parse(manifestFile)
+
+def extractDesugarConfig = tasks.register('extractDesugarConfig', Copy) {
+    from({ zipTree(configurations.desugarConfig.singleFile) }) {
+        include 'META-INF/desugar/d8/desugar.json'
+        eachFile { it.path = it.name }
+    }
+    includeEmptyDirs = false
+    into layout.buildDirectory.dir('desugar')
+}
+
+// Must use the same desugaring as the Android host (min sdk + desugar_jdk_libs) so that
+// java.time / streams map to the host's j$ classes and interface default methods are
+// moved to companion classes. pluginMinSdk must not be lower than the host's minSdk (24),
+// otherwise the plugin crashes at runtime.
+def dex = tasks.register('dex', Exec) {
+    dependsOn tasks.named('jar'), extractDesugarConfig
+    def jarFile = tasks.named('jar').flatMap { it.archiveFile }
+    def outDir = layout.buildDirectory.dir('dex')
+    inputs.file(jarFile)
+    inputs.files(configurations.compileClasspath)
+    inputs.property('minApi', pluginMinSdk)
+    outputs.dir(outDir)
+    doFirst {
+        if (sdkDir == null) {
+            throw new GradleException('Android SDK not found: set sdk.dir in local.properties or ANDROID_HOME')
+        }
+        def d8 = new File(sdkDir, "build-tools/$buildToolsVersion/d8")
+        def androidJar = new File(sdkDir, 'platforms/android-36/android.jar')
+        def out = outDir.get().asFile
+        project.delete(out)
+        out.mkdirs()
+        def cmd = [d8.path, '--release', '--min-api', pluginMinSdk,
+                   '--lib', androidJar.path,
+                   '--desugared-lib', layout.buildDirectory.file('desugar/desugar.json').get().asFile.path,
+                   '--output', out.path]
+        configurations.compileClasspath.files.each { cmd += ['--classpath', it.path] }
+        cmd += jarFile.get().asFile.path
+        commandLine cmd
+    }
+}
+
+tasks.register('pluginPackage', Zip) {
+    group = 'plugin'
+    dependsOn dex
+    archiveFileName = "${rootProject.name}-${manifestJson.versionCode}.ppp"
+    destinationDirectory = layout.buildDirectory.dir('repo')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from({ zipTree(tasks.named('jar').get().archiveFile) }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+    from(layout.buildDirectory.dir('dex')) {
+        include 'classes.dex'
+    }
+}
+
+tasks.register('assembleRepo') {
+    group = 'plugin'
+    dependsOn 'pluginPackage'
+}

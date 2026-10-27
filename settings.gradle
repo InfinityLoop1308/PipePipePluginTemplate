@@ -1,0 +1,19 @@
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'myservice'
+
+include 'tools'
+
+// Optional: build against a local PipePipeExtractor checkout instead of the published one.
+// Put `extractorDir=../PipePipeExtractor` into local.properties.
+def localProps = new Properties()
+def localPropsFile = file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def extractorDir = localProps.getProperty('extractorDir')
+if (extractorDir != null) {
+    includeBuild(extractorDir)
+}
