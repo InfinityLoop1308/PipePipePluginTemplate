@@ -53,6 +53,8 @@ Users discover plugins through [awesome-pipepipe-plugins](https://github.com/Inf
 
 `.github/workflows/ci.yml` builds the plugin and generates an index with a throwaway key on every push and pull request.
 
+The throwaway key only validates the build; nothing it signs is published. If you add a release workflow, sign with your permanent key (for example from a repository secret). PipePipe rejects updates signed with a different key than the one used at first install.
+
 ## License
 
 GPL-3.0, same as PipePipe. See `LICENSE`.
