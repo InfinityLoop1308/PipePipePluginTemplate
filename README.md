@@ -15,6 +15,10 @@ Starting point for a third-party [PipePipe](https://github.com/InfinityLoop1308/
 
 By default the plugin compiles against the extractor's `main` branch through JitPack (`extractorVersion` in `gradle.properties`). To build against a local checkout, put `extractorDir=../PipePipeExtractor` into `local.properties`.
 
+## Libraries provided by the host
+
+The plugin package contains only your own code. These libraries are `compileOnly` in `build.gradle` and are provided by PipePipe at runtime: the extractor, nanojson, jsoup, commons-lang3 and spotbugs-annotations. The versions in `gradle.properties` are the ones current hosts ship, but PipePipe does not guarantee them: stick to long-stable APIs. Any other library is not available at runtime, so implement what you need yourself.
+
 ## plugin.json
 
 | Field | Rules |

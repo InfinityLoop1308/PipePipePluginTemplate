@@ -52,6 +52,7 @@ dependencies {
     compileOnly "com.github.InfinityLoop1308.PipePipeExtractor:extractor:$extractorVersion"
     compileOnly "com.github.TeamNewPipe:nanojson:$nanojsonVersion"
     compileOnly "org.jsoup:jsoup:$jsoupVersion"
+    compileOnly "org.apache.commons:commons-lang3:$lang3Version"
     compileOnly "com.github.spotbugs:spotbugs-annotations:$spotbugsVersion"
     desugarConfig "com.android.tools:desugar_jdk_libs_configuration:$desugarJdkLibsVersion"
 }
